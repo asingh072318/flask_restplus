@@ -1,12 +1,13 @@
 from flask_restplus import Api
 from apis.admindb import admindbnamespace
 from apis.publicdb import publicdbnamespace
+from apis.login import loginnamespace
 
 authorizations = {
-    'apikey':{
+    'jwt':{
         'type' : 'apiKey',
         'in'   : 'header',
-        'name' : 'X-API-KEY'
+        'name' : 'X-JWT-TOKEN'
     }
 }
 
@@ -16,3 +17,4 @@ api = Api(title='Database API',
 
 api.add_namespace(publicdbnamespace)
 api.add_namespace(admindbnamespace)
+api.add_namespace(loginnamespace)

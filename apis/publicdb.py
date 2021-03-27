@@ -12,7 +12,7 @@ publicdbnamespace = Namespace(
 class alldbdetails(Resource):
     def execute_cmd(self,statement):
         config = configparser.ConfigParser()
-        config.read('apis/config/public.ini')
+        config.read('config/public.ini')
         conn = psycopg2.connect(
             host='127.0.0.1',
             database=config['public']['database'],
