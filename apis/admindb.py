@@ -4,7 +4,7 @@ import uuid
 import configparser
 import psycopg2
 from werkzeug.security import generate_password_hash, check_password_hash
-import datetime as dt
+from datetime import datetime, timezone
 
 admindbnamespace = Namespace(
     'Admin_API',description='This is a set of Admin APIs to handle Postgres DB')
@@ -16,51 +16,76 @@ new_user_fields = admindbnamespace.model('Create_User', {
 
 @admindbnamespace.route('/user')
 class userCR(Resource):
+    def __init__(self):
+        self.exit_code = 1
+        self.message = ""
+
     def obj_new_user(self,username,password):
         new_user = {}
         new_user['username'] = username
         new_user['password'] = password
         new_user['admin'] = False
         new_user['public_id'] = str(uuid.uuid4())
+        new_user['default_db'] = username
+        new_user['created_on'] = datetime.now(timezone.utc).astimezone().isoformat()
+        print(new_user)
         return new_user
     
-    def execute_cmd(self,statement):
+    def execute_cmd(self,statement,operation):
         config = configparser.ConfigParser()
         config.read('config/public.ini')
-        print(config)
         conn = psycopg2.connect(
             host='127.0.0.1',
             database=config['public']['database'],
             user=config['public']['username'],
             password=config['public']['password'])
         cur = conn.cursor()
-        cur.execute(statement)
-        response = cur.fetchall()
-        conn.commit()
-        cur.close()
-        conn.close()
-        return response
+        try:
+            cur.execute(statement)
+            if operation == "check_user":
+                # parse check_user response
+                pass
+            else if operation == "post_user_table":
+                if cur.rowcount:
+                    self.exit_code = 200
+                    self.message = "User Successfully Created"
+            conn.commit()
+        except psycopg2.Error as e:
+            self.exit_code = e.pgcode
+            self.message = e.pgerror
+            conn.rollback()  
+        finally:
+            cur.close()
+            conn.close()
 
     def check_if_user_exists_already(self,user):
         # returns true if user exists already
         # returns false if user DNE
-        statement = '''select rolname from pg_roles where rolname='{}';'''.format(user['username'])
-        response = self.execute_cmd(statement)
+        statement = '''select username from users where username='{}';'''.format(user['username'])
+        response = self.execute_cmd(statement,"check_user")
         if not response:
             return False
         return True
 
     def create_new_database_with_owner(self,user):
         # execute command CREATE DATABASE user['username'] with owner user['username']
+        statement = '''CREATE DATABASE {} with OWNER {};'''.format(user['username'],user['username'])
+        response = self.execute_cmd(statement)
+        
         pass
 
     def create_new_user_in_pgdb(self,user):
         # execute command CREATE USER user['username'] with password user['password']
+        statement = '''CREATE USER {} WITH PASSWORD '{}';'''.format(user['username'],user['password'])
+        response = self.execute_cmd(statement)
         pass
 
     def update_entry_in_user_table(self,user):
         hashed_password = generate_password_hash(user['password'],method='sha256')
         user['password'] = hashed_password
+        statement = '''INSERT INTO users(public_id,username,password,admin,default_db,created_on) VALUES('{}','{}','{}',{},'{}','{}') RETURNING *;'''.format(user['public_id'],user['username'],user['password'],user['admin'],user['username'],user['created_on'])
+        response = self.execute_cmd(statement,"post_user_table")
+        return response
         # create new entry in usertable
 
     #@admindbnamespace.doc(security='apikey')
@@ -71,13 +96,15 @@ class userCR(Resource):
     def post(self):
         data = request.get_json()
         new_user = self.obj_new_user(data['username'],data['password'])
+        response = {}
         if not self.check_if_user_exists_already(new_user):
-            self.update_entry_in_user_table(new_user)
+            response = self.update_entry_in_user_table(new_user)
             self.create_new_user_in_pgdb(new_user)
             self.create_new_database_with_owner(new_user)
-            return "User Created Successfully"
         else:
-            return "User Exists Already"
+            self.exit_code = 409
+            self.message = 'User exists already'
+        return response
 
 @admindbnamespace.route('/user/<user_id>')
 class userRUD(Resource):
