@@ -3,6 +3,7 @@ from flask import request
 import uuid
 import configparser
 import psycopg2
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 
@@ -16,10 +17,10 @@ new_user_fields = admindbnamespace.model('Create_User', {
 
 @admindbnamespace.route('/user')
 class userCR(Resource):
-    def __init__(self,exit_code=1,message="",**kwargs):
-        self.exit_code = exit_code
-        self.message = message
-        super(userCR, self).__init__(**kwargs)
+    def __init__(self,*args,**kwargs):
+        self.exit_code = 1
+        self.message = ""
+        super(userCR, self).__init__(*args,**kwargs)
     
     def obj_response(self):
         response = {}
@@ -46,6 +47,8 @@ class userCR(Resource):
             database=config['public']['database'],
             user=config['public']['username'],
             password=config['public']['password'])
+        if operation == 'create_new_db':
+            conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cur = conn.cursor()
         try:
             cur.execute(statement)
@@ -71,10 +74,12 @@ class userCR(Resource):
         except psycopg2.Error as e:
             self.exit_code = e.pgcode
             self.message = e.pgerror
+            print('Going to rollback ', e.pgerror)
             conn.rollback()  
         finally:
             cur.close()
             conn.close()
+            print(operation)
 
     def check_if_user_exists_already(self,user):
         # returns true if user exists already
