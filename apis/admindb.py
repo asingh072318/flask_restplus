@@ -20,7 +20,13 @@ class userCR(Resource):
     def __init__(self,*args,**kwargs):
         self.exit_code = 1
         self.message = ""
+        self.users = []
         super(userCR, self).__init__(*args,**kwargs)
+
+    def reset_code_message(self):
+        self.exit_code = 1
+        self.message = ""
+        self.users = []
     
     def obj_response(self):
         response = {}
@@ -36,7 +42,6 @@ class userCR(Resource):
         new_user['public_id'] = str(uuid.uuid4())
         new_user['default_db'] = username
         new_user['created_on'] = datetime.now(timezone.utc).astimezone().isoformat()
-        print(new_user)
         return new_user
     
     def execute_cmd(self,statement,operation):
@@ -53,40 +58,46 @@ class userCR(Resource):
         try:
             cur.execute(statement)
             if operation == "check_user":
-                # parse check_user response
                 if not cur.fetchall():
                     self.exit_code = 200
-                    self.message = 'No Duplicate user found'
+                    self.message += 'No Duplicate user found\n'
                 else:
                     self.exit_code = 409
                     self.message = 'User Exists Already'
             elif operation == "post_user_table":
                 if cur.rowcount:
                     self.exit_code = 200
-                    self.message = "User Successfully Created"
+                    self.message += "User Successfully Created in Users Table\n"
             elif operation == "create_new_db":
                 self.exit_code = 200
-                self.message = "DB Created Successfully"
+                self.message += "Database Created Successfully\n"
             elif operation == "create_new_role":
                 self.exit_code = 200
-                self.message = "Role Created Successfully"
+                self.message += "Role Created Successfully\n"
+            elif operation == "get_all_users":
+                users = cur.fetchall()
+                for user in users:
+                    result = {
+                        'username' : user[0],
+                        'public_id' : user[1],
+                        'admin' : user[2]
+                    }
+                    self.users.append(result)
             conn.commit()
         except psycopg2.Error as e:
             self.exit_code = e.pgcode
             self.message = e.pgerror
-            print('Going to rollback ', e.pgerror)
             conn.rollback()  
         finally:
             cur.close()
             conn.close()
-            print(operation)
 
     def check_if_user_exists_already(self,user):
         # returns true if user exists already
         # returns false if user DNE
         statement = '''select username from users where username='{}';'''.format(user['username'])
         self.execute_cmd(statement,"check_user")
-        if self.exit_code == 200 and self.message == "No Duplicate user found":
+        if self.exit_code == 200:
             return False
         return True
 
@@ -109,10 +120,14 @@ class userCR(Resource):
 
     #@admindbnamespace.doc(security='apikey')
     def get(self):
-        return 'This will return all users'
+        self.reset_code_message()
+        statement = '''SELECT username,public_id,admin FROM users;'''
+        self.execute_cmd(statement,"get_all_users")
+        return self.users
     
     @admindbnamespace.expect(new_user_fields)
     def post(self):
+        self.reset_code_message()
         data = request.get_json()
         new_user = self.obj_new_user(data['username'],data['password'])
         response = {}
@@ -122,7 +137,7 @@ class userCR(Resource):
             self.create_new_database_with_owner(new_user)
         else:
             self.exit_code = 409
-            self.message = 'User exists already'
+            self.message = 'User exists already main'
         return self.obj_response()
 
 @admindbnamespace.route('/user/<user_id>')
