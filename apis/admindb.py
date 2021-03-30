@@ -113,8 +113,7 @@ class userCR(Resource):
 
     def update_entry_in_user_table(self,user):
         hashed_password = generate_password_hash(user['password'],method='sha256')
-        user['password'] = hashed_password
-        statement = '''INSERT INTO users(public_id,username,password,admin,default_db,created_on) VALUES('{}','{}','{}',{},'{}','{}') RETURNING *;'''.format(user['public_id'],user['username'],user['password'],user['admin'],user['username'],user['created_on'])
+        statement = '''INSERT INTO users(public_id,username,password,admin,default_db,created_on) VALUES('{}','{}','{}',{},'{}','{}') RETURNING *;'''.format(user['public_id'],user['username'],hashed_password,user['admin'],user['username'],user['created_on'])
         self.execute_cmd(statement,"post_user_table")
         # create new entry in usertable
 
@@ -137,16 +136,144 @@ class userCR(Resource):
             self.create_new_database_with_owner(new_user)
         else:
             self.exit_code = 409
-            self.message = 'User exists already main'
+            self.message = 'User exists already'
         return self.obj_response()
 
 @admindbnamespace.route('/user/<user_id>')
 class userRUD(Resource):
-    def get(self):
-        return 'This will return one user'
+
+    def __init__(self,*args,**kwargs):
+        self.username = ""
+        self.public_id = ""
+        self.admin = False
+        self.created_on = datetime.now(timezone.utc).astimezone().isoformat()
+        self.exit_code = 1
+        self.message = ""
+        super(userRUD,self).__init__(*args,**kwargs)
     
-    def put(self):
-        return 'This will promote one user'
+    def reset(self):
+        self.username = ""
+        self.public_id = ""
+        self.admin = False
+        self.created_on = datetime.now(timezone.utc).astimezone().isoformat()
+        self.exit_code = 1
+        self.message = ""
     
-    def delete(self):
-        return 'This will delete one user'
+    def getuserObj(self):
+        if self.public_id == "":
+            response = {}
+            response['exit_code'] = self.exit_code
+            response['message'] = self.message
+            return response
+        user = {}
+        user['public_id'] = self.public_id
+        user['admin'] = self.admin
+        user['created_on'] = self.created_on
+        user['username'] = self.username
+        return user
+    
+    def resetUser(self):
+        self.public_id = ""
+        self.admin = False
+        self.username = ""
+        self.created_on = datetime.now(timezone.utc).astimezone().isoformat()
+        self.exit_code = 200
+        self.message += "Successfully Removed from Users Table\n"
+    
+    def execute_cmd(self,statement,operation):
+        config = configparser.ConfigParser()
+        config.read('config/public.ini')
+        conn = psycopg2.connect(
+            host='127.0.0.1',
+            database=config['public']['database'],
+            user=config['public']['username'],
+            password=config['public']['password'])
+        cur = conn.cursor()
+        if operation == 'delete_database' or operation == 'delete_user':
+            conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        try:
+            cur.execute(statement)
+            if operation == 'get_details':
+                response = cur.fetchone()
+                if response:
+                    self.public_id = response[0]
+                    self.username = response[1]
+                    self.admin = response[2]
+                    self.created_on = response[3].strftime("%m/%d/%Y, %H:%M:%S")
+                    self.exit_code = 200
+                    self.message = "User Found.\n"
+                else:
+                    self.exit_code = 404
+                    self.message = "Cannot Find user with given Public_id.\n"
+            elif operation == 'make_admin':
+                if cur.rowcount:
+                    self.exit_code = 200
+                    self.message += "Successfully Made admin.\n"
+            elif operation == 'make_superuser':
+                self.admin = True
+                self.exit_code = 200
+                self.message += "Successfully Granted SUPERUSER.\n"
+            elif operation == 'delete_database':
+                self.exit_code = 200
+                self.message += "Successfully Deleted Database. \n"
+            elif operation == 'delete_user':
+                self.exit_code = 200
+                self.message += "Successfully Deleted User. \n"
+            elif operation == 'delete_from_users':
+                self.resetUser()
+            conn.commit()
+        except psycopg2.Error as e:
+            self.exit_code = e.pgcode
+            self.message = e.pgerror
+            conn.rollback()  
+        finally:
+            cur.close()
+            conn.close()
+    
+    def makesuperuser(self,username):
+        statement = '''ALTER USER {} WITH SUPERUSER;'''.format(username)
+        self.execute_cmd(statement,"make_superuser")
+
+    def makeadmin(self,username):
+        statement = '''UPDATE users SET admin = True WHERE username = '{}' returning *;'''.format(username)
+        self.execute_cmd(statement,"make_admin")
+    
+    def deleteDatabase(self,username):
+        statement = '''DROP DATABASE IF EXISTS {};'''.format(username)
+        print('inside delete database')
+        self.execute_cmd(statement,"delete_database")
+    
+    def deleteUser(self,username):
+        statement = '''DROP USER IF EXISTS {};'''.format(username)
+        self.execute_cmd(statement,"delete_user")
+    
+    def deletefromuserstable(self,username):
+        statement = '''DELETE FROM USERS where username = '{}';'''.format(username)
+        self.execute_cmd(statement,"delete_from_users")
+
+    def get(self,user_id):
+        self.reset()
+        statement = '''SELECT public_id,username,admin,created_on from users where public_id='{}';'''.format(user_id)
+        self.execute_cmd(statement,"get_details")
+        return self.getuserObj()
+    
+    def put(self,user_id):
+        # ALTER USER {} with SUPERUSER;
+        self.reset()
+        statement = '''SELECT public_id,username,admin,created_on from users where public_id='{}';'''.format(user_id)
+        self.execute_cmd(statement,"get_details")
+        if self.exit_code == 200:
+            self.makeadmin(self.username)
+            self.makesuperuser(self.username)
+            self.execute_cmd(statement,"get_details")
+        return self.getuserObj()
+    
+    def delete(self,user_id):
+        self.reset()
+        statement = '''SELECT public_id,username,admin,created_on from users where public_id='{}';'''.format(user_id)
+        self.execute_cmd(statement,"get_details")
+        if self.exit_code == 200:
+            self.deleteDatabase(self.username)
+            self.deleteUser(self.username)
+            self.deletefromuserstable(self.username)
+        return self.getuserObj()
