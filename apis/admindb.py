@@ -16,9 +16,16 @@ new_user_fields = admindbnamespace.model('Create_User', {
 
 @admindbnamespace.route('/user')
 class userCR(Resource):
-    def __init__(self):
-        self.exit_code = 1
-        self.message = ""
+    def __init__(self,exit_code=1,message="",**kwargs):
+        self.exit_code = exit_code
+        self.message = message
+        super(userCR, self).__init__(**kwargs)
+    
+    def obj_response(self):
+        response = {}
+        response['exit_code'] = self.exit_code
+        response['message'] = self.message
+        return response
 
     def obj_new_user(self,username,password):
         new_user = {}
@@ -44,11 +51,22 @@ class userCR(Resource):
             cur.execute(statement)
             if operation == "check_user":
                 # parse check_user response
-                pass
-            else if operation == "post_user_table":
+                if not cur.fetchall():
+                    self.exit_code = 200
+                    self.message = 'No Duplicate user found'
+                else:
+                    self.exit_code = 409
+                    self.message = 'User Exists Already'
+            elif operation == "post_user_table":
                 if cur.rowcount:
                     self.exit_code = 200
                     self.message = "User Successfully Created"
+            elif operation == "create_new_db":
+                self.exit_code = 200
+                self.message = "DB Created Successfully"
+            elif operation == "create_new_role":
+                self.exit_code = 200
+                self.message = "Role Created Successfully"
             conn.commit()
         except psycopg2.Error as e:
             self.exit_code = e.pgcode
@@ -62,30 +80,26 @@ class userCR(Resource):
         # returns true if user exists already
         # returns false if user DNE
         statement = '''select username from users where username='{}';'''.format(user['username'])
-        response = self.execute_cmd(statement,"check_user")
-        if not response:
+        self.execute_cmd(statement,"check_user")
+        if self.exit_code == 200 and self.message == "No Duplicate user found":
             return False
         return True
 
     def create_new_database_with_owner(self,user):
         # execute command CREATE DATABASE user['username'] with owner user['username']
         statement = '''CREATE DATABASE {} with OWNER {};'''.format(user['username'],user['username'])
-        response = self.execute_cmd(statement)
-        
-        pass
+        self.execute_cmd(statement,"create_new_db")
 
     def create_new_user_in_pgdb(self,user):
         # execute command CREATE USER user['username'] with password user['password']
         statement = '''CREATE USER {} WITH PASSWORD '{}';'''.format(user['username'],user['password'])
-        response = self.execute_cmd(statement)
-        pass
+        self.execute_cmd(statement,"create_new_role")
 
     def update_entry_in_user_table(self,user):
         hashed_password = generate_password_hash(user['password'],method='sha256')
         user['password'] = hashed_password
         statement = '''INSERT INTO users(public_id,username,password,admin,default_db,created_on) VALUES('{}','{}','{}',{},'{}','{}') RETURNING *;'''.format(user['public_id'],user['username'],user['password'],user['admin'],user['username'],user['created_on'])
-        response = self.execute_cmd(statement,"post_user_table")
-        return response
+        self.execute_cmd(statement,"post_user_table")
         # create new entry in usertable
 
     #@admindbnamespace.doc(security='apikey')
@@ -98,13 +112,13 @@ class userCR(Resource):
         new_user = self.obj_new_user(data['username'],data['password'])
         response = {}
         if not self.check_if_user_exists_already(new_user):
-            response = self.update_entry_in_user_table(new_user)
+            self.update_entry_in_user_table(new_user)
             self.create_new_user_in_pgdb(new_user)
             self.create_new_database_with_owner(new_user)
         else:
             self.exit_code = 409
             self.message = 'User exists already'
-        return response
+        return self.obj_response()
 
 @admindbnamespace.route('/user/<user_id>')
 class userRUD(Resource):
