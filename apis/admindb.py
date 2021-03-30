@@ -6,6 +6,8 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
+from pathlib import Path
+import shutil
 
 admindbnamespace = Namespace(
     'Admin_API',description='This is a set of Admin APIs to handle Postgres DB')
@@ -91,6 +93,12 @@ class userCR(Resource):
         finally:
             cur.close()
             conn.close()
+    
+    def create_home_directory(self,user):
+        directory = "/root/storage/{}".format(user['username'])
+        Path(directory).mkdir(parents=True, exist_ok=True)
+        self.message += 'Successfully created HOME DIRECTORY.\n'
+
 
     def check_if_user_exists_already(self,user):
         # returns true if user exists already
@@ -134,6 +142,7 @@ class userCR(Resource):
             self.update_entry_in_user_table(new_user)
             self.create_new_user_in_pgdb(new_user)
             self.create_new_database_with_owner(new_user)
+            self.create_home_directory(new_user)
         else:
             self.exit_code = 409
             self.message = 'User exists already'
@@ -229,6 +238,12 @@ class userRUD(Resource):
         finally:
             cur.close()
             conn.close()
+
+    def deletehomedirectory(self,user):
+        directory = "/root/storage/{}".format(user)
+        path = Path(directory)
+        shutil.rmtree(path)
+        self.message += "Successfully Removed Homedir.\n"
     
     def makesuperuser(self,username):
         statement = '''ALTER USER {} WITH SUPERUSER;'''.format(username)
@@ -276,4 +291,5 @@ class userRUD(Resource):
             self.deleteDatabase(self.username)
             self.deleteUser(self.username)
             self.deletefromuserstable(self.username)
+            self.deletehomedirectory(self.username)
         return self.getuserObj()
