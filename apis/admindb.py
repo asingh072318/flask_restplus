@@ -50,7 +50,7 @@ class userCR(Resource):
         config = configparser.ConfigParser()
         config.read('config/public.ini')
         conn = psycopg2.connect(
-            host='127.0.0.1',
+            host=config['public']['hostname'],
             database=config['public']['database'],
             user=config['public']['username'],
             password=config['public']['password'])
@@ -125,7 +125,6 @@ class userCR(Resource):
         self.execute_cmd(statement,"post_user_table")
         # create new entry in usertable
 
-    #@admindbnamespace.doc(security='apikey')
     def get(self):
         self.reset_code_message()
         statement = '''SELECT username,public_id,admin FROM users;'''
@@ -193,7 +192,7 @@ class userRUD(Resource):
         config = configparser.ConfigParser()
         config.read('config/public.ini')
         conn = psycopg2.connect(
-            host='127.0.0.1',
+            host=config['public']['hostname'],
             database=config['public']['database'],
             user=config['public']['username'],
             password=config['public']['password'])
