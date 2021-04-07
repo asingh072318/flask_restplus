@@ -8,14 +8,33 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 from pathlib import Path
 import shutil
+from functools import wraps
+import json
+import jwt
 
 admindbnamespace = Namespace(
     'Admin_API',description='This is a set of Admin APIs to handle Postgres DB')
 
 new_user_fields = admindbnamespace.model('Create_User', {
-    'username': fields.String,
-    'password': fields.String,
+    'username': fields.String('username'),
+    'password': fields.String('password'),
 })
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args,**kwargs):
+        config = configparser.ConfigParser()
+        config.read('config/secrets.ini')
+        token = request.headers['jwt-token']
+        if not token:
+            return {'message':'Token is Missing!'}
+        try:
+            data = jwt.decode(token,config['secretkey']['key'],algorithms="HS256")
+        except Exception as e:
+            return {'exit_code':401,'message':'Token is Invalid!'}
+
+        return f(*args,**kwargs)
+    return decorated
 
 @admindbnamespace.route('/user')
 class userCR(Resource):
@@ -125,6 +144,7 @@ class userCR(Resource):
         self.execute_cmd(statement,"post_user_table")
         # create new entry in usertable
 
+    @token_required
     def get(self):
         self.reset_code_message()
         statement = '''SELECT username,public_id,admin FROM users;'''

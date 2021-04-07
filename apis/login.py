@@ -47,6 +47,7 @@ class login(Resource):
             self.exit_code = e.pgcode
             self.message = e.message
         finally:
+            print(self.public_id)
             cur.close()
             conn.close()
     
@@ -71,7 +72,7 @@ class login(Resource):
         self.get_preauth_info(self.username)
         if self.exit_code == 200:
             if self.check_password():
-                token = jwt.encode({'public_id' : self.public_id , 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)},config['secretkey']['key'])
+                token = jwt.encode({'public_id' : self.public_id , 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)},config['secretkey']['key'],algorithm="HS256")
                 return {'token' : token}
             else:
                 self.exit_code = 401
