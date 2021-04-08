@@ -20,6 +20,7 @@ class login(Resource):
         self.hashed_password = ""
         self.username = ""
         self.password = ""
+        self.admin = False
         super(login, self).__init__(*args,**kwargs)
     
     def get_preauth_info(self,username):
@@ -32,12 +33,13 @@ class login(Resource):
             password=config['public']['password'])
         cur = conn.cursor()
         try:
-            statement = '''SELECT public_id,password FROM users WHERE username='{}';'''.format(username)
+            statement = '''SELECT public_id,password,admin FROM users WHERE username='{}';'''.format(username)
             cur.execute(statement)
             response = cur.fetchone()
             if response:
                 self.public_id = response[0]
                 self.hashed_password = response[1]
+                self.admin = response[2]
                 self.exit_code = 200
                 self.message = "Successfully fetched hashed password. \n"
             else:
@@ -72,7 +74,7 @@ class login(Resource):
         self.get_preauth_info(self.username)
         if self.exit_code == 200:
             if self.check_password():
-                token = jwt.encode({'public_id' : self.public_id , 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)},config['secretkey']['key'],algorithm="HS256")
+                token = jwt.encode({'public_id' : self.public_id ,'admin' : self.admin, 'password' : self.password, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)},config['secretkey']['key'],algorithm="HS256")
                 return {'token' : token}
             else:
                 self.exit_code = 401

@@ -29,10 +29,18 @@ def token_required(f):
         if not token:
             return {'message':'Token is Missing!'}
         try:
-            data = jwt.decode(token,config['secretkey']['key'],algorithms="HS256")
+            kwargs['userdata'] = jwt.decode(token,config['secretkey']['key'],algorithms="HS256")
         except Exception as e:
             return {'exit_code':401,'message':'Token is Invalid!'}
 
+        return f(*args,**kwargs)
+    return decorated
+
+def admin_required(f):
+    @wraps(f)
+    def decorated(*args,**kwargs):
+        if not kwargs['userdata']['admin']:
+            return {'message':'Unauthorized','exit_code':401}
         return f(*args,**kwargs)
     return decorated
 
@@ -145,13 +153,17 @@ class userCR(Resource):
         # create new entry in usertable
 
     @token_required
-    def get(self):
+    @admin_required
+    def get(self,*args,**kwargs):
         self.reset_code_message()
         statement = '''SELECT username,public_id,admin FROM users;'''
         self.execute_cmd(statement,"get_all_users")
+        print(kwargs['userdata'])
         return self.users
     
     @admindbnamespace.expect(new_user_fields)
+    @token_required
+    @admin_required
     def post(self):
         self.reset_code_message()
         data = request.get_json()
@@ -285,12 +297,16 @@ class userRUD(Resource):
         statement = '''DELETE FROM USERS where username = '{}';'''.format(username)
         self.execute_cmd(statement,"delete_from_users")
 
+    @token_required
+    @admin_required
     def get(self,user_id):
         self.reset()
         statement = '''SELECT public_id,username,admin,created_on from users where public_id='{}';'''.format(user_id)
         self.execute_cmd(statement,"get_details")
         return self.getuserObj()
     
+    @token_required
+    @admin_required
     def put(self,user_id):
         # ALTER USER {} with SUPERUSER;
         self.reset()
@@ -302,6 +318,8 @@ class userRUD(Resource):
             self.execute_cmd(statement,"get_details")
         return self.getuserObj()
     
+    @token_required
+    @admin_required
     def delete(self,user_id):
         self.reset()
         statement = '''SELECT public_id,username,admin,created_on from users where public_id='{}';'''.format(user_id)
