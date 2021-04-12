@@ -162,8 +162,6 @@ class userCR(Resource):
         return self.users
     
     @admindbnamespace.expect(new_user_fields)
-    @token_required
-    @admin_required
     def post(self):
         self.reset_code_message()
         data = request.get_json()

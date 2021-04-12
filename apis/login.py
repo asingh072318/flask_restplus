@@ -21,6 +21,7 @@ class login(Resource):
         self.username = ""
         self.password = ""
         self.admin = False
+        self.public_id = ""
         super(login, self).__init__(*args,**kwargs)
     
     def get_preauth_info(self,username):
@@ -36,6 +37,7 @@ class login(Resource):
             statement = '''SELECT public_id,password,admin FROM users WHERE username='{}';'''.format(username)
             cur.execute(statement)
             response = cur.fetchone()
+            print(response)
             if response:
                 self.public_id = response[0]
                 self.hashed_password = response[1]
@@ -75,7 +77,7 @@ class login(Resource):
         if self.exit_code == 200:
             if self.check_password():
                 token = jwt.encode({'public_id' : self.public_id ,'admin' : self.admin, 'password' : self.password, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)},config['secretkey']['key'],algorithm="HS256")
-                return {'token' : token}
+                return {'token' : token,'exit_code':200,'admin': self.admin}
             else:
                 self.exit_code = 401
                 self.message = "Invalid Credentials"
