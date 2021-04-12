@@ -11,6 +11,7 @@ import shutil
 from functools import wraps
 import json
 import jwt
+from apis.functions import admin_required, token_required
 
 admindbnamespace = Namespace(
     'Admin_API',description='This is a set of Admin APIs to handle Postgres DB')
@@ -19,30 +20,6 @@ new_user_fields = admindbnamespace.model('Create_User', {
     'username': fields.String('username'),
     'password': fields.String('password'),
 })
-
-def token_required(f):
-    @wraps(f)
-    def decorated(*args,**kwargs):
-        config = configparser.ConfigParser()
-        config.read('config/secrets.ini')
-        token = request.headers['jwt-token']
-        if not token:
-            return {'message':'Token is Missing!'}
-        try:
-            kwargs['userdata'] = jwt.decode(token,config['secretkey']['key'],algorithms="HS256")
-        except Exception as e:
-            return {'exit_code':401,'message':'Token is Invalid!'}
-
-        return f(*args,**kwargs)
-    return decorated
-
-def admin_required(f):
-    @wraps(f)
-    def decorated(*args,**kwargs):
-        if not kwargs['userdata']['admin']:
-            return {'message':'Unauthorized','exit_code':401}
-        return f(*args,**kwargs)
-    return decorated
 
 @admindbnamespace.route('/user')
 class userCR(Resource):
