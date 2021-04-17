@@ -27,13 +27,16 @@ class login(Resource):
     def get_preauth_info(self,username):
         config = configparser.ConfigParser()
         config.read('config/public.ini')
-        conn = psycopg2.connect(
-            host=config['public']['hostname'],
-            database=config['public']['database'],
-            user=config['public']['username'],
-            password=config['public']['password'])
-        cur = conn.cursor()
         try:
+            conn = psycopg2.connect(
+                host=config['public']['hostname'],
+                database=config['public']['database'],
+                user=config['public']['username'],
+                password=config['public']['password'])
+            cur = conn.cursor()
+            statement = '''CREATE TABLE IF NOT EXISTS users (public_id uuid,username text, password text, admin boolean,default_db text,created_on timestamp);'''
+            cur.execute(statement)
+            conn.commit()
             statement = '''SELECT public_id,password,admin FROM users WHERE username='{}';'''.format(username)
             cur.execute(statement)
             response = cur.fetchone()
@@ -47,13 +50,17 @@ class login(Resource):
             else:
                 self.exit_code = 404
                 self.message = "No User Found. \n"
-        except psycopg2.Error as e:
+            cur.close()
+            conn.close()
+        except psycopg2.OperationalError as e:
+            self.exit_code = 502
+            self.message = "Bad Gateway, Cannot Connect to PORT 5432"
+        except (psycopg2.Error, Exception) as e:
             self.exit_code = e.pgcode
             self.message = e.message
         finally:
             print(self.public_id)
-            cur.close()
-            conn.close()
+            
     
     def check_password(self):
         return check_password_hash(self.hashed_password,self.password)

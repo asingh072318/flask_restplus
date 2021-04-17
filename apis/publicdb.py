@@ -14,7 +14,7 @@ class alldbdetails(Resource):
         config = configparser.ConfigParser()
         config.read('config/public.ini')
         conn = psycopg2.connect(
-            host='127.0.0.1',
+            host=config['public']['hostname'],
             database=config['public']['database'],
             user=config['public']['username'],
             password=config['public']['password'])
