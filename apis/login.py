@@ -46,6 +46,7 @@ class login(Resource):
                 self.hashed_password = response[1]
                 self.admin = response[2]
                 self.exit_code = 200
+                self.username = username
                 self.message = "Successfully fetched hashed password. \n"
             else:
                 self.exit_code = 404
@@ -76,6 +77,10 @@ class login(Resource):
     @loginnamespace.expect(resource_fields)
     def post(self):
         data = request.get_json()
+        if not data:
+            self.exit_code = 401
+            self.message = 'Invalid Input'
+            return self.generateResponse()
         config = configparser.ConfigParser()
         config.read('config/secrets.ini')
         self.username = data['username']
@@ -83,7 +88,7 @@ class login(Resource):
         self.get_preauth_info(self.username)
         if self.exit_code == 200:
             if self.check_password():
-                token = jwt.encode({'public_id' : self.public_id ,'admin' : self.admin, 'password' : self.password, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)},config['secretkey']['key'],algorithm="HS256")
+                token = jwt.encode({'username':self.username,'public_id' : self.public_id ,'admin' : self.admin, 'password' : self.password, 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)},config['secretkey']['key'],algorithm="HS256")
                 return {'token' : token,'exit_code':200,'admin': self.admin}
             else:
                 self.exit_code = 401

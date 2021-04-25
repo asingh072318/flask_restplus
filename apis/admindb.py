@@ -117,7 +117,7 @@ class userCR(Resource):
         # execute command CREATE DATABASE user['username'] with owner user['username']
         statement = '''CREATE DATABASE {} with OWNER {};'''.format(user['username'],user['username'])
         self.execute_cmd(statement,"create_new_db")
-
+    
     def create_new_user_in_pgdb(self,user):
         # execute command CREATE USER user['username'] with password user['password']
         statement = '''CREATE USER {} WITH PASSWORD '{}';'''.format(user['username'],user['password'])
@@ -130,7 +130,6 @@ class userCR(Resource):
         # create new entry in usertable
 
     @token_required
-    @admin_required
     def get(self,*args,**kwargs):
         self.reset_code_message()
         statement = '''SELECT username,public_id,admin FROM users;'''
@@ -273,15 +272,12 @@ class userRUD(Resource):
         self.execute_cmd(statement,"delete_from_users")
 
     @token_required
-    @admin_required
     def get(self,user_id):
         self.reset()
         statement = '''SELECT public_id,username,admin,created_on from users where public_id='{}';'''.format(user_id)
         self.execute_cmd(statement,"get_details")
         return self.getuserObj()
     
-    @token_required
-    @admin_required
     def put(self,user_id):
         # ALTER USER {} with SUPERUSER;
         self.reset()

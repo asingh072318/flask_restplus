@@ -70,6 +70,13 @@ class fileuploads(Resource):
             'message' : self.message
         }
         return response
+    
+    def check_format(self,filename):
+        ACCEPTED_FORMAT = ['jpg','jpeg','doc','docx','pdf','png','txt']
+        EXTENSION = filename.split('.')
+        if not EXTENSION or EXTENSION[-1] not in ACCEPTED_FORMAT:
+            return False
+        return True
 
     @token_required
     def post(self,*args,**kwargs):
@@ -94,6 +101,15 @@ class fileuploads(Resource):
             upload = request.files['file']
             filename = secure_filename(upload.filename)
             storage_location = os.path.join(location,filename)
+            if os.path.exists(storage_location):
+                self.exit_code = 409
+                self.message = 'File Exists Already'
+                return self.generateResponse()
+            accepted_format = self.check_format(filename)
+            if not accepted_format:
+                self.exit_code = 422
+                self.message = 'File Format not supported'
+                return self.generateResponse()
             updated_db = self.upload_filedata_to_db(filename)
             if not updated_db:
                 self.exit_code = 503
