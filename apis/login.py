@@ -57,7 +57,7 @@ class login(Resource):
             self.exit_code = 502
             self.message = "Bad Gateway, Cannot Connect to PORT 5432"
         except (psycopg2.Error, Exception) as e:
-            self.exit_code = e.pgcode
+            self.exit_code = e.pgcode or -1
             self.message = e.message
         finally:
             print(self.public_id)
