@@ -16,7 +16,6 @@ jsonschema==3.2.0
 jwt==1.2.0
 MarkupSafe==1.1.1
 psycopg2==2.7.7
-psycopg2-binary==2.8.6
 pycparser==2.20
 pyrsistent==0.17.3
 pytz==2021.1
@@ -28,3 +27,4 @@ toml==0.10.2
 typing-extensions==3.7.4.3
 Werkzeug==0.16.1
 zipp==3.4.1
+pyJWT
